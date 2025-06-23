@@ -1,0 +1,10 @@
+﻿{
+  "name": "NEWAY SECURITY SERVICES",
+  "short_name": "NEWAY",
+  "description": "Professional Security Solutions",
+  "start_url": "/effective-barnacle/index.html",
+  "display": "standalone",
+  "background_color": "#0A0A0A",
+  "theme_color": "#FFD700",
+  "icons": []
+}

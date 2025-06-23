@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <base href="/effective-barnacle/">
+    <title>NEWAY SECURITY SERVICES - Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&family=Open+Sans:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/payslip-styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body class="dashboard-page">
+    <nav class="top-nav">
+        <div class="nav-logo">
+            <h1 class="logo-text">NEWAY SECURITY SERVICES</h1>
+        </div>
+        <div class="nav-links">
+            <button onclick="logout()" class="btn-logout">Logout</button>
+        </div>
+    </nav>
+
+    <main class="dashboard-container">
+        <h1>Payroll Management System</h1>
+        
+        <!-- Dashboard Tabs -->
+        <div class="dashboard-tabs">
+            <button class="tab-button active" data-tab="payslip-generation">Generate Payslip</button>
+            <button class="tab-button" data-tab="payslip-history">Payslip History</button>
+            <button class="tab-button" data-tab="employee-profiles">Employee Profiles</button>
+        </div>
+        
+        <!-- Payslip Generation Tab -->
+        <div id="payslip-generation" class="tab-content active">
+            <form id="payslipForm" class="payslip-form" onsubmit="return generatePayslip(event)">
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label for="employeeName">Employee Name</label>
+                        <input type="text" id="employeeName" name="employeeName" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="idNumber">ID Number</label>
+                        <input type="text" id="idNumber" name="idNumber" required pattern="[0-9]{13}" title="Please enter a 13-digit ID number">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="position">Position</label>
+                        <input type="text" id="position" name="position" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="email">Email Address</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="phone">Phone Number</label>
+                        <input type="tel" id="phone" name="phone" required pattern="[0-9]{10}" title="Please enter a 10-digit phone number">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="address">Physical Address</label>
+                        <input type="text" id="address" name="address">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="hoursWorked">Hours Worked</label>
+                        <input type="number" id="hoursWorked" name="hoursWorked" min="0" step="0.5" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="hourlyRate">Hourly Rate (ZAR)</label>
+                        <input type="number" id="hourlyRate" name="hourlyRate" min="0" step="0.01" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="deductions">Deductions (ZAR)</label>
+                        <input type="number" id="deductions" name="deductions" min="0" step="0.01" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="payPeriod">Pay Period</label>
+                        <input type="month" id="payPeriod" name="payPeriod" required>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button type="submit" class="btn-generate">Generate Payslip</button>
+                    <button type="button" id="sharePayslip" class="btn-share" disabled>Download PDF</button>
+                    <button type="button" id="autofillProfile" class="btn-share">Create/Update Profile</button>
+                </div>
+            </form>
+            
+            <div id="payslipPreview" class="payslip-preview"></div>
+        </div>
+        
+        <!-- Payslip History Tab -->
+        <div id="payslip-history" class="tab-content">
+            <div class="search-container">
+                <div class="input-group">
+                    <label for="searchPayslip">Search by Employee Name or ID</label>
+                    <input type="text" id="searchPayslip" placeholder="Type to search...">
+                </div>
+            </div>
+            
+            <table class="payslip-table">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Employee Name</th>
+                        <th>ID Number</th>
+                        <th>Amount</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="payslipHistoryBody">
+                    <!-- Payslip history will be populated by JavaScript -->
+                </tbody>
+            </table>
+            
+            <div id="noPayslips" class="empty-state">
+                <p>No payslips have been generated yet.</p>
+            </div>
+        </div>
+        
+        <!-- Employee Profiles Tab -->
+        <div id="employee-profiles" class="tab-content">
+            <div class="search-container">
+                <div class="input-group">
+                    <label for="searchEmployees">Search Employees</label>
+                    <input type="text" id="searchEmployees" placeholder="Type to search...">
+                </div>
+                <button id="addNewEmployee" class="btn-generate">Add New Employee</button>
+            </div>
+            
+            <div id="employeeList">
+                <!-- Employee profiles will be populated by JavaScript -->
+            </div>
+            
+            <div id="noEmployees" class="empty-state">
+                <p>No employee profiles have been created yet.</p>
+                <p>Profiles will be automatically created when generating payslips.</p>
+            </div>
+        </div>
+    </main>
+    
+    <!-- Employee Edit Modal -->
+    <div id="profileModal" class="modal-overlay">
+        <div class="modal-container">
+            <button class="modal-close" onclick="closeProfileModal()">&times;</button>
+            <h2 class="modal-title">Edit Employee Profile</h2>
+            
+            <form id="profileForm">
+                <input type="hidden" id="profileId">
+                
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label for="profileName">Full Name</label>
+                        <input type="text" id="profileName" name="profileName" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="profileId">ID Number</label>
+                        <input type="text" id="profileIdNumber" name="profileIdNumber" required pattern="[0-9]{13}">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="profilePosition">Position</label>
+                        <input type="text" id="profilePosition" name="profilePosition" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="profileEmail">Email</label>
+                        <input type="email" id="profileEmail" name="profileEmail" required>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="profilePhone">Phone</label>
+                        <input type="tel" id="profilePhone" name="profilePhone" required pattern="[0-9]{10}">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="profileAddress">Address</label>
+                        <input type="text" id="profileAddress" name="profileAddress">
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="profileRate">Default Hourly Rate (ZAR)</label>
+                        <input type="number" id="profileRate" name="profileRate" min="0" step="0.01" required>
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button type="submit" class="btn-generate">Save Changes</button>
+                    <button type="button" onclick="closeProfileModal()" class="btn-share">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Notification Element -->
+    <div id="notification" class="notification">
+        <span id="notificationText">Operation successful</span>
+    </div>
+
+    <footer class="dashboard-footer">
+        <div class="company-info">
+            <p>PSIRA Registration No: 3145212</p>
+            <p>STAND NO. 10111, MATSIKITSANE, R40 MAIN ROAD, ACORNHOEK 1360</p>
+            <p>Contact: 079 955 0700 / 072 555 6444</p>
+        </div>
+    </footer>
+    
+    <script src="js/main.js"></script>
+    <script src="js/payslip.js"></script>
