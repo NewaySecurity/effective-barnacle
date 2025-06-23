@@ -707,3 +707,21 @@ h1, h2, h3, h4, h5, h6 {
         padding: 0 1rem;
     }
 }
+/* Add to existing styles.css */
+.logo-text {
+    color: var(--accent-gold);
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin: 0;
+}
+
+.nav-logo {
+    padding: 0.5rem 0;
+}
+
+@media (max-width: 768px) {
+    .logo-text {
+        font-size: 1.2rem;
+    }
+}
