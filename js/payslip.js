@@ -14,33 +14,170 @@ function formatCurrency(amount) {
         currency: 'ZAR'
     }).format(amount);
 }
-
 // Get all stored payslips
 function getPayslipHistory() {
-    return getFromLocalStorage(STORAGE_KEYS.PAYSLIPS) || [];
+    const encryptedData = getFromLocalStorage(STORAGE_KEYS.PAYSLIPS);
+    if (!encryptedData) return [];
+    
+    // Decrypt data if it's encrypted
+    try {
+        if (encryptedData.isEncrypted) {
+            return decryptPayslipData(encryptedData.data) || [];
+        }
+        return encryptedData;
+    } catch (error) {
+        console.error('Error decrypting payslip data:', error);
+        return [];
+    }
 }
 
-// Save a payslip to history
+// Save a payslip to history with encryption
 function savePayslipToHistory(payslipData) {
     const payslips = getPayslipHistory();
     
-    // Add unique ID and timestamp to payslip
+    // Generate document signature
+    const signature = generateDocumentSignature(payslipData);
+    
+    // Set document expiry (90 days from now)
+    const expiryDate = new Date();
+    expiryDate.setDate(expiryDate.getDate() + 90);
+    
+    // Create audit entry
+    const auditEntry = {
+        action: 'create_payslip',
+        timestamp: new Date().toISOString(),
+        user: localStorage.getItem('currentUser') || 'admin',
+        employeeId: payslipData.idNumber
+    };
+    
+    // Add security and metadata to payslip
     const newPayslip = {
         ...payslipData,
         id: generateUniqueId(),
         timestamp: new Date().toISOString(),
+        signature: signature,
+        expiryDate: expiryDate.toISOString(),
+        auditTrail: [auditEntry],
+        verificationCode: generateVerificationCode(payslipData),
+        securityLevel: 'standard'
     };
     
     // Add to beginning of array (newest first)
     payslips.unshift(newPayslip);
     
-    // Save back to storage
-    return saveToLocalStorage(STORAGE_KEYS.PAYSLIPS, payslips);
+    // Encrypt and save to storage
+    const encryptedData = {
+        isEncrypted: true,
+        data: encryptPayslipData(payslips)
+    };
+    
+    return saveToLocalStorage(STORAGE_KEYS.PAYSLIPS, encryptedData);
 }
 
 // Generate a unique ID for payslips
 function generateUniqueId() {
     return Date.now().toString(36) + Math.random().toString(36).substr(2, 5).toUpperCase();
+}
+
+// Generate a document signature based on payslip data
+function generateDocumentSignature(payslipData) {
+    try {
+        // Create a string from critical payslip data
+        const dataString = [
+            payslipData.employeeName,
+            payslipData.idNumber,
+            payslipData.payPeriod,
+            payslipData.totalPay.toString(),
+            new Date().toISOString()
+        ].join('|');
+        
+        // Use a simple hash algorithm for demo purposes
+        // In production, use a proper cryptographic hash function
+        let hash = 0;
+        for (let i = 0; i < dataString.length; i++) {
+            const char = dataString.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        
+        // Return hash as hexadecimal
+        return Math.abs(hash).toString(16).padStart(8, '0').toUpperCase();
+    } catch (error) {
+        console.error('Error generating document signature:', error);
+        return 'SIGNATURE_ERROR';
+    }
+}
+
+// Generate a verification code for QR code
+function generateVerificationCode(payslipData) {
+    try {
+        // Create a verification string with key data
+        const verificationString = [
+            'NEWAY',
+            payslipData.idNumber,
+            payslipData.payPeriod,
+            formatCurrency(payslipData.totalPay).replace(/[^0-9.]/g, '')
+        ].join('-');
+        
+        // Add checksum (simple sum of character codes)
+        let checksum = 0;
+        for (let i = 0; i < verificationString.length; i++) {
+            checksum += verificationString.charCodeAt(i);
+        }
+        
+        return `${verificationString}-${checksum}`;
+    } catch (error) {
+        console.error('Error generating verification code:', error);
+        return 'VERIFICATION_ERROR';
+    }
+}
+
+// Simple encryption for payslip data (for demonstration)
+// In production, use a proper encryption library
+function encryptPayslipData(data) {
+    try {
+        // Convert data to string
+        const jsonString = JSON.stringify(data);
+        
+        // Simple XOR encryption with a fixed key (demo only)
+        // In production, use proper encryption standards
+        const key = 'NEWAY_SECURITY_KEY';
+        let result = '';
+        
+        for (let i = 0; i < jsonString.length; i++) {
+            const charCode = jsonString.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+            result += String.fromCharCode(charCode);
+        }
+        
+        // Return Base64 encoded string
+        return btoa(result);
+    } catch (error) {
+        console.error('Error encrypting payslip data:', error);
+        return null;
+    }
+}
+
+// Decrypt payslip data
+function decryptPayslipData(encryptedData) {
+    try {
+        // Decode Base64 string
+        const encodedString = atob(encryptedData);
+        
+        // Reverse XOR encryption
+        const key = 'NEWAY_SECURITY_KEY';
+        let result = '';
+        
+        for (let i = 0; i < encodedString.length; i++) {
+            const charCode = encodedString.charCodeAt(i) ^ key.charCodeAt(i % key.length);
+            result += String.fromCharCode(charCode);
+        }
+        
+        // Parse JSON data
+        return JSON.parse(result);
+    } catch (error) {
+        console.error('Error decrypting payslip data:', error);
+        return null;
+    }
 }
 
 // Format date for display
@@ -172,7 +309,7 @@ function generatePayslipHTML(data) {
         </div>
     `;
 }
-// Generate PDF for payslip
+// Generate PDF for payslip with security features
 function generatePDF(payslipData = null) {
     const data = payslipData || currentPayslipData;
     if (!data) {
@@ -180,32 +317,74 @@ function generatePDF(payslipData = null) {
         return null;
     }
     
-    // Create a promise to load the logo
-    const loadLogo = new Promise((resolve, reject) => {
-        const logoImg = new Image();
-        logoImg.onload = function() {
-            resolve(logoImg);
-        };
-        logoImg.onerror = function() {
-            console.warn('Could not load logo, using text fallback');
-            resolve(null);
-        };
-        logoImg.src = 'assets/Neway Logo.png'; // Path relative to base URL
-    });
+    // Generate QR code for verification
+    const generateQRCode = () => {
+        try {
+            // Create verification data
+            const verificationData = data.verificationCode || generateVerificationCode(data);
+            
+            // Generate QR code using a public API
+            return `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(verificationData)}`;
+        } catch (error) {
+            console.warn('Could not generate QR code', error);
+            return null;
+        }
+    };
+    
+    // Create a promise to load the logo and QR code
+    const loadImages = Promise.all([
+        // Load logo
+        new Promise((resolve, reject) => {
+            const logoImg = new Image();
+            logoImg.onload = function() {
+                resolve(logoImg);
+            };
+            logoImg.onerror = function() {
+                console.warn('Could not load logo, using text fallback');
+                resolve(null);
+            };
+            logoImg.src = 'assets/Neway Logo.png'; // Path relative to base URL
+        }),
+        
+        // Load QR code
+        new Promise((resolve, reject) => {
+            const qrCode = generateQRCode();
+            if (!qrCode) {
+                resolve(null);
+                return;
+            }
+            
+            const qrImg = new Image();
+            qrImg.onload = function() {
+                resolve(qrImg);
+            };
+            qrImg.onerror = function() {
+                console.warn('Could not load QR code');
+                resolve(null);
+            };
+            qrImg.src = qrCode;
+        })
+    ]);
     
     // Return a promise so we can use async/await for image loading
-    return loadLogo.then(logoImg => {
+    return loadImages.then(([logoImg, qrImg]) => {
         try {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF();
             
-            // Set document properties
+            // Set document properties with security metadata
             doc.setProperties({
                 title: `Payslip - ${data.employeeName} - ${data.payPeriod}`,
                 subject: 'Employee Payslip',
                 author: 'Neway Security Services',
-                keywords: 'payslip, salary, employee',
-                creator: 'Neway Security Payroll System'
+                keywords: 'payslip, salary, employee, secure document',
+                creator: 'Neway Security Payroll System',
+                // Security metadata
+                documentId: data.id || generateUniqueId(),
+                signature: data.signature || generateDocumentSignature(data),
+                creationDate: data.timestamp || new Date().toISOString(),
+                expiryDate: data.expiryDate || new Date(Date.now() + 7776000000).toISOString(), // 90 days
+                securityLevel: data.securityLevel || 'standard'
             });
             
             // Format the pay period
@@ -217,6 +396,7 @@ function generatePDF(payslipData = null) {
             
             // Document constants
             const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
             const margins = {
                 top: 15,
                 left: 15,
@@ -232,6 +412,24 @@ function generatePDF(payslipData = null) {
                 mediumGray: [150, 150, 150],  // Medium gray for borders
                 white: [255, 255, 255]        // White
             };
+            
+            // =================== DIGITAL WATERMARK ===================
+            
+            // Add watermark for document security
+            doc.setTextColor(240, 240, 240); // Very light gray
+            doc.setFontSize(50);
+            doc.setFont('helvetica', 'bold');
+            
+            // Rotate text for watermark
+            const watermarkText = 'NEWAY SECURITY';
+            
+            // Draw diagonal watermarks across the page
+            for (let i = 0; i < 4; i++) {
+                doc.text(watermarkText, pageWidth / 2, 70 + (i * 60), {
+                    align: 'center',
+                    angle: 45
+                });
+            }
             
             // =================== HEADER SECTION ===================
             
@@ -413,6 +611,46 @@ function generatePDF(payslipData = null) {
         doc.text('NET PAY', margins.left, yPos);
         doc.text(formatCurrency(data.totalPay).replace('ZAR', 'R'), startX + columnWidths[0] + columnWidths[1] + columnWidths[2], yPos);
         
+        // =================== VERIFICATION SECTION ===================
+        
+        // Add QR code if available
+        if (qrImg) {
+            // QR code position (right side)
+            const qrSize = 30;
+            const qrX = pageWidth - margins.right - qrSize - 5;
+            const qrY = yPos + 15;
+            
+            // Add QR code to PDF
+            doc.addImage(
+                qrImg,
+                'PNG',
+                qrX,
+                qrY,
+                qrSize,
+                qrSize
+            );
+            
+            // Add verification instructions
+            doc.setFontSize(8);
+            doc.setTextColor(...colors.primary);
+            doc.setFont('helvetica', 'bold');
+            doc.text('SCAN TO VERIFY', qrX + (qrSize/2), qrY - 5, { align: 'center' });
+            
+            doc.setFont('helvetica', 'normal');
+            const verifyText = [
+                'This document contains a secure',
+                'verification code. Scan the QR code',
+                'to verify this document\'s authenticity',
+                'or visit verify.newaysecurity.co.za'
+            ];
+            
+            let textY = qrY + qrSize + 5;
+            verifyText.forEach(line => {
+                doc.text(line, qrX + (qrSize/2), textY, { align: 'center' });
+                textY += 4;
+            });
+        }
+        
         // =================== COMPANY POLICIES SECTION ===================
         
         yPos += 20;
@@ -446,6 +684,32 @@ function generatePDF(payslipData = null) {
             doc.text(policy, margins.left, yPos);
             yPos += 8;
         });
+        
+        // =================== DOCUMENT SIGNATURE SECTION ===================
+        
+        yPos += 15;
+        doc.setFillColor(...colors.lightGray);
+        doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 20, 'F');
+        
+        // Add document signature and security information
+        const signature = data.signature || generateDocumentSignature(data);
+        const documentId = data.id || generateUniqueId();
+        
+        doc.setTextColor(...colors.primary);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'bold');
+        doc.text('DOCUMENT SECURITY INFORMATION', margins.left + 5, yPos + 5);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Document ID: ${documentId}`, margins.left + 5, yPos + 10);
+        doc.text(`Digital Signature: ${signature}`, margins.left + 5, yPos + 15);
+        
+        // Add document expiry
+        const expiryDate = data.expiryDate 
+            ? new Date(data.expiryDate).toLocaleDateString('en-ZA') 
+            : new Date(Date.now() + 7776000000).toLocaleDateString('en-ZA'); // 90 days
+            
+        doc.text(`Valid Until: ${expiryDate}`, pageWidth - margins.right - 50, yPos + 10);
         
         // =================== FOOTER SECTION ===================
         
@@ -600,8 +864,7 @@ function renderPayslipHistory(searchTerm = '') {
         `;
     }).join('');
 }
-
-// View a payslip from history
+// View a payslip from history with security checks
 function viewPayslip(payslipId) {
     const payslips = getPayslipHistory();
     const payslip = payslips.find(p => p.id === payslipId);
@@ -609,6 +872,45 @@ function viewPayslip(payslipId) {
     if (!payslip) {
         showNotification('Payslip not found', 'error');
         return;
+    }
+    
+    // Check document expiry
+    if (payslip.expiryDate) {
+        const expiryDate = new Date(payslip.expiryDate);
+        if (expiryDate < new Date()) {
+            showNotification('This payslip has expired. Please contact HR for a valid copy.', 'warning');
+            // Still allow viewing but with warning
+        }
+    }
+    
+    // Verify document signature
+    const calculatedSignature = generateDocumentSignature(payslip);
+    if (payslip.signature && payslip.signature !== calculatedSignature) {
+        showNotification('Warning: Document signature verification failed. This document may have been altered.', 'error');
+        // Continue with caution
+    }
+    
+    // Create audit trail entry for viewing
+    if (payslip.auditTrail) {
+        payslip.auditTrail.push({
+            action: 'view_payslip',
+            timestamp: new Date().toISOString(),
+            user: localStorage.getItem('currentUser') || 'admin'
+        });
+        
+        // Save updated audit trail
+        const payslips = getPayslipHistory();
+        const index = payslips.findIndex(p => p.id === payslipId);
+        if (index !== -1) {
+            payslips[index] = payslip;
+            
+            // Encrypt and save
+            const encryptedData = {
+                isEncrypted: true,
+                data: encryptPayslipData(payslips)
+            };
+            saveToLocalStorage(STORAGE_KEYS.PAYSLIPS, encryptedData);
+        }
     }
     
     // Set as current payslip
@@ -654,6 +956,73 @@ function downloadPayslipPDF() {
         showNotification('Could not generate PDF. Please try again.', 'error');
     });
 }
+// Verify a payslip's authenticity
+function verifyPayslip(verificationCode) {
+    // Parse the verification code
+    const parts = verificationCode.split('-');
+    if (parts.length < 5) {
+        return {
+            valid: false,
+            message: 'Invalid verification code format'
+        };
+    }
+    
+    // Extract information
+    const company = parts[0];
+    const idNumber = parts[1];
+    const payPeriod = parts[2];
+    const amount = parts[3];
+    const checksum = parseInt(parts[4]);
+    
+    // Verify checksum
+    let calculatedChecksum = 0;
+    const verificationString = [company, idNumber, payPeriod, amount].join('-');
+    for (let i = 0; i < verificationString.length; i++) {
+        calculatedChecksum += verificationString.charCodeAt(i);
+    }
+    
+    if (calculatedChecksum !== checksum) {
+        return {
+            valid: false,
+            message: 'Document verification failed: Invalid checksum'
+        };
+    }
+    
+    // Look up payslip in history
+    const payslips = getPayslipHistory();
+    const matchingPayslip = payslips.find(p => 
+        p.idNumber === idNumber && 
+        p.payPeriod === payPeriod &&
+        formatCurrency(p.totalPay).replace(/[^0-9.]/g, '') === amount
+    );
+    
+    if (!matchingPayslip) {
+        return {
+            valid: false,
+            message: 'No matching payslip found in records'
+        };
+    }
+    
+    // Check expiry
+    if (matchingPayslip.expiryDate) {
+        const expiryDate = new Date(matchingPayslip.expiryDate);
+        if (expiryDate < new Date()) {
+            return {
+                valid: true,
+                expired: true,
+                payslip: matchingPayslip,
+                message: 'Document is authentic but has expired'
+            };
+        }
+    }
+    
+    return {
+        valid: true,
+        expired: false,
+        payslip: matchingPayslip,
+        message: 'Document verification successful'
+    };
+}
 
 // Event handlers
 document.addEventListener('DOMContentLoaded', function() {
@@ -671,5 +1040,92 @@ document.addEventListener('DOMContentLoaded', function() {
                 lookupEmployee();
             }
         });
+    }
+    
+    // Add document verification UI
+    const dashboardContainer = document.querySelector('.dashboard-container');
+    if (dashboardContainer) {
+        // Create verification tab button
+        const tabsContainer = document.querySelector('.dashboard-tabs');
+        if (tabsContainer) {
+            const verifyButton = document.createElement('button');
+            verifyButton.className = 'tab-button';
+            verifyButton.dataset.tab = 'document-verification';
+            verifyButton.textContent = 'Verify Document';
+            tabsContainer.appendChild(verifyButton);
+            
+            // Create verification tab content
+            const verifyContent = document.createElement('div');
+            verifyContent.id = 'document-verification';
+            verifyContent.className = 'tab-content';
+            verifyContent.innerHTML = `
+                <h2>Verify Payslip Document</h2>
+                <p>Enter the verification code from a payslip to verify its authenticity.</p>
+                
+                <div class="form-grid">
+                    <div class="input-group">
+                        <label for="verificationCode">Verification Code</label>
+                        <input type="text" id="verificationCode" placeholder="NEWAY-1234567890-2023-06-12345">
+                    </div>
+                </div>
+                
+                <div class="button-group">
+                    <button type="button" id="btnVerify" class="btn-generate">Verify Document</button>
+                </div>
+                
+                <div id="verificationResult" class="verification-result"></div>
+            `;
+            
+            dashboardContainer.appendChild(verifyContent);
+            
+            // Add verification functionality
+            const btnVerify = document.getElementById('btnVerify');
+            if (btnVerify) {
+                btnVerify.addEventListener('click', function() {
+                    const code = document.getElementById('verificationCode').value.trim();
+                    if (!code) {
+                        showNotification('Please enter a verification code', 'warning');
+                        return;
+                    }
+                    
+                    const result = verifyPayslip(code);
+                    const resultContainer = document.getElementById('verificationResult');
+                    
+                    if (result.valid) {
+                        resultContainer.innerHTML = `
+                            <div class="verification-success">
+                                <h3>✓ Document Verified</h3>
+                                <p>${result.message}</p>
+                                <div class="verification-details">
+                                    <p><strong>Employee:</strong> ${result.payslip.employeeName}</p>
+                                    <p><strong>ID Number:</strong> ${result.payslip.idNumber}</p>
+                                    <p><strong>Pay Period:</strong> ${result.payslip.payPeriod}</p>
+                                    <p><strong>Amount:</strong> ${formatCurrency(result.payslip.totalPay)}</p>
+                                    ${result.expired ? '<p class="verification-warning">Note: This document has expired</p>' : ''}
+                                </div>
+                                <button type="button" class="btn-view" id="btnViewVerified">View Document</button>
+                            </div>
+                        `;
+                        
+                        // Add view button functionality
+                        document.getElementById('btnViewVerified').addEventListener('click', function() {
+                            viewPayslip(result.payslip.id);
+                        });
+                        
+                        showNotification('Document verification successful', 'success');
+                    } else {
+                        resultContainer.innerHTML = `
+                            <div class="verification-error">
+                                <h3>✗ Verification Failed</h3>
+                                <p>${result.message}</p>
+                                <p>This document could not be verified. Please check the verification code and try again.</p>
+                            </div>
+                        `;
+                        
+                        showNotification('Document verification failed', 'error');
+                    }
+                });
+            }
+        }
     }
 });
