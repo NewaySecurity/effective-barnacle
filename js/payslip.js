@@ -223,28 +223,25 @@ function generatePDF(payslipData = null) {
                 right: 15
             };
             
-            // Company colors
+            // Company colors - Exact brand colors from Neway Security logo
             const colors = {
-                primary: [10, 10, 10],       // Black
-                accent: [255, 215, 0],       // Gold
-                lightGray: [240, 240, 240],  // Light gray for backgrounds
-                mediumGray: [150, 150, 150], // Medium gray for borders
-                white: [255, 255, 255]       // White
+                primary: [0, 0, 0],           // Black #000000
+                accent: [255, 215, 0],        // Gold #FFD700
+                energy: [255, 0, 0],          // Red #FF0000
+                lightGray: [240, 240, 240],   // Light gray for backgrounds
+                mediumGray: [150, 150, 150],  // Medium gray for borders
+                white: [255, 255, 255]        // White
             };
             
             // =================== HEADER SECTION ===================
             
             // Add logo if successfully loaded
             if (logoImg) {
-                // Calculate logo dimensions maintaining aspect ratio
-                const logoWidth = 50;
+                // Calculate logo dimensions maintaining aspect ratio (smaller size)
+                const logoWidth = 35; // Reduced from 50px to 35px
                 const logoHeight = (logoImg.height / logoImg.width) * logoWidth;
                 
-                // Add logo with background
-                doc.setFillColor(...colors.primary);
-                doc.rect(margins.left, margins.top, logoWidth, logoHeight, 'F');
-                
-                // Add the logo image
+                // Add the logo image without background
                 doc.addImage(
                     logoImg, 
                     'PNG', 
@@ -254,18 +251,17 @@ function generatePDF(payslipData = null) {
                     logoHeight
                 );
             } else {
-                // Fallback to text logo if image couldn't be loaded
-                // Company logo space (left side)
-                doc.setFillColor(...colors.primary);
-                doc.rect(margins.left, margins.top, 50, 25, 'F');
-                
-                // Logo placeholder text
-                doc.setTextColor(...colors.accent);
+                // Fallback to text logo using brand colors if image couldn't be loaded
+                // "NEWAY" in red
+                doc.setTextColor(...colors.energy); // Red color for "NEWAY"
                 doc.setFontSize(16);
                 doc.setFont('helvetica', 'bold');
-                doc.text('NEWAY', margins.left + 25, margins.top + 10, { align: 'center' });
+                doc.text('NEWAY', margins.left + 17.5, margins.top + 10, { align: 'center' });
+                
+                // "SECURITY" in gold
+                doc.setTextColor(...colors.accent); // Gold color for "SECURITY"
                 doc.setFontSize(12);
-                doc.text('SECURITY', margins.left + 25, margins.top + 18, { align: 'center' });
+                doc.text('SECURITY', margins.left + 17.5, margins.top + 18, { align: 'center' });
             }
         
         // Company info (right side)
@@ -278,8 +274,7 @@ function generatePDF(payslipData = null) {
             'STAND NO. 10111, MATSIKITSANE',
             'R40 MAIN ROAD, ACORNHOEK 1360',
             'Tel: 079 955 0700 / 072 555 6444',
-            'PSIRA Registration No: 3145212',
-            'VAT Reg No: 499873021'
+            'PSIRA Registration No: 3145212'
         ];
         
         let yPos = margins.top + 5;
@@ -290,10 +285,15 @@ function generatePDF(payslipData = null) {
         
         // Payslip title bar
         yPos = margins.top + 35;
-        doc.setFillColor(...colors.primary);
+        doc.setFillColor(...colors.primary); // Black background
         doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 10, 'F');
         
-        doc.setTextColor(...colors.white);
+        // Gold border for the header bar
+        doc.setDrawColor(...colors.accent); // Gold border
+        doc.setLineWidth(0.5);
+        doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 10);
+        
+        doc.setTextColor(...colors.accent); // Gold text
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
         doc.text('EMPLOYEE PAYSLIP', pageWidth / 2, yPos + 6.5, { align: 'center' });
@@ -349,11 +349,16 @@ function generatePDF(payslipData = null) {
         
         yPos = margins.top + 85;
         
-        // Section header
-        doc.setFillColor(...colors.lightGray);
+        // Section header with brand colors
+        doc.setFillColor(...colors.primary); // Black background
         doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 8, 'F');
         
-        doc.setTextColor(...colors.primary);
+        // Gold border
+        doc.setDrawColor(...colors.accent);
+        doc.setLineWidth(0.5);
+        doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 8);
+        
+        doc.setTextColor(...colors.accent); // Gold text
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text('PAYMENT DETAILS', margins.left + 5, yPos + 5.5);
@@ -408,42 +413,45 @@ function generatePDF(payslipData = null) {
         doc.text('NET PAY', margins.left, yPos);
         doc.text(formatCurrency(data.totalPay).replace('ZAR', 'R'), startX + columnWidths[0] + columnWidths[1] + columnWidths[2], yPos);
         
-        // =================== BANKING DETAILS SECTION ===================
+        // =================== COMPANY POLICIES SECTION ===================
         
         yPos += 20;
-        doc.setFillColor(...colors.lightGray);
+        doc.setFillColor(...colors.primary); // Black background
         doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 8, 'F');
         
-        doc.setTextColor(...colors.primary);
+        // Gold border
+        doc.setDrawColor(...colors.accent);
+        doc.setLineWidth(0.5);
+        doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 8);
+        
+        doc.setTextColor(...colors.accent); // Gold text
         doc.setFontSize(10);
-        doc.text('BANKING DETAILS', margins.left + 5, yPos + 5.5);
+        doc.text('COMPANY POLICIES', margins.left + 5, yPos + 5.5);
         
         yPos += 15;
         doc.setFontSize(9);
-        doc.setFont('helvetica', 'bold');
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(...colors.primary); // Black text for content
         
-        // Bank details content
-        const bankDetails = [
-            { label: 'BANK NAME:', value: 'ABSA BANK' },
-            { label: 'ACCOUNT NAME:', value: 'NEWAY SECURITY SERVICES' },
-            { label: 'ACCOUNT NUMBER:', value: '4095481821' },
-            { label: 'BRANCH CODE:', value: '632005' },
-            { label: 'REFERENCE:', value: data.idNumber }
+        // Company policies content
+        const policies = [
+            "• This document serves as an official record of payment for the specified period",
+            "• Employees should retain this document for income tax and personal records",
+            "• For any payroll queries, please contact the HR department within 7 days",
+            "• All information contained in this document is confidential",
+            "• Employee Reference Number: " + data.idNumber
         ];
         
-        bankDetails.forEach(detail => {
-            doc.setFont('helvetica', 'bold');
-            doc.text(detail.label, margins.left, yPos);
-            doc.setFont('helvetica', 'normal');
-            doc.text(detail.value, margins.left + 40, yPos);
-            yPos += 6;
+        policies.forEach(policy => {
+            doc.text(policy, margins.left, yPos);
+            yPos += 8;
         });
         
         // =================== FOOTER SECTION ===================
         
-        // Contact section
+        // Contact section with gold accent line
         yPos = 250;
-        doc.setFillColor(...colors.primary);
+        doc.setFillColor(...colors.accent); // Gold line
         doc.rect(margins.left, yPos, pageWidth - margins.left - margins.right, 0.5, 'F');
         
         yPos += 5;
@@ -456,17 +464,21 @@ function generatePDF(payslipData = null) {
         yPos += 5;
         doc.text('For any payroll inquiries, please contact accounts@newaysecurity.co.za or call 079 955 0700', pageWidth / 2, yPos, { align: 'center' });
         
-        // Legal footer
+        // Legal footer with brand colors
         yPos = 270;
-        doc.setFillColor(...colors.primary);
+        doc.setFillColor(...colors.primary); // Black background
         doc.rect(0, yPos, pageWidth, 25, 'F');
+        
+        // Gold accent line at the top of footer
+        doc.setFillColor(...colors.accent);
+        doc.rect(0, yPos, pageWidth, 1, 'F');
         
         doc.setTextColor(...colors.white);
         yPos += 10;
         doc.setFontSize(7);
         
         const footerText = [
-            'NEWAY SECURITY SERVICES | PSIRA Registration No: 3145212 | VAT Reg No: 499873021',
+            'NEWAY SECURITY SERVICES | PSIRA Registration No: 3145212',
             'STAND NO. 10111, MATSIKITSANE, R40 MAIN ROAD, ACORNHOEK 1360',
             'www.newaysecurity.co.za | info@newaysecurity.co.za'
         ];
