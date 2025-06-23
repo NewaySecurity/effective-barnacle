@@ -1,4 +1,7 @@
-﻿function validateLogin(event) {
+﻿// Update the base path for GitHub Pages
+const BASE_PATH = "/effective-barnacle/";
+
+function validateLogin(event) {
     event.preventDefault();
     
     const username = document.getElementById("username").value;
@@ -11,7 +14,7 @@
     if (username === validUsername && password === validPassword) {
         // Successful login
         localStorage.setItem("isLoggedIn", "true");
-        window.location.href = "dashboard.html";
+        window.location.href = BASE_PATH + "dashboard.html";
     } else {
         alert("Invalid credentials. Please try again.");
     }
@@ -24,26 +27,22 @@ function checkLoginStatus() {
     const isLoggedIn = localStorage.getItem("isLoggedIn");
     const currentPage = window.location.pathname.split("/").pop();
     
-    if (currentPage !== "login.html" && !isLoggedIn) {
+    if (currentPage !== "login.html" && !isLoggedIn && currentPage !== "index.html") {
         // Redirect to login if not logged in
-        window.location.href = "login.html";
+        window.location.href = BASE_PATH + "login.html";
     } else if (currentPage === "login.html" && isLoggedIn) {
         // Redirect to dashboard if already logged in
-        window.location.href = "dashboard.html";
+        window.location.href = BASE_PATH + "dashboard.html";
     }
 }
 
 // Add logout functionality
 function logout() {
     localStorage.removeItem("isLoggedIn");
-    window.location.href = "login.html";
+    window.location.href = BASE_PATH + "login.html";
 }
 
-// Check login status when page loads
-document.addEventListener("DOMContentLoaded", checkLoginStatus);
-// Add this to the existing main.js file
-
-// Contact form handling
+// Handle contact form submission
 function handleContactSubmit(event) {
     event.preventDefault();
     
@@ -56,8 +55,7 @@ function handleContactSubmit(event) {
         message: document.getElementById("message").value
     };
     
-    // In a real implementation, this would send the data to a server
-    // For now, we'll just show a success message
+    // Show success message
     alert("Thank you for your message. We will get back to you soon!");
     
     // Clear the form
@@ -66,11 +64,11 @@ function handleContactSubmit(event) {
     return false;
 }
 
-// Add mobile navigation handling
+// Check login status when page loads
 document.addEventListener("DOMContentLoaded", function() {
-    // Check if we're on a page that needs login protection
+    // Check if we are on a page that needs login protection
     const protectedPages = ["dashboard.html"];
-    const currentPage = window.location.pathname.split("/").pop();
+    const currentPage = window.location.pathname.split("/").pop() || "index.html";
     
     if (protectedPages.includes(currentPage)) {
         checkLoginStatus();
