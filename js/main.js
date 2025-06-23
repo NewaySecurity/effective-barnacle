@@ -1,6 +1,28 @@
-﻿// Update the base path for GitHub Pages
-const BASE_PATH = "/effective-barnacle/";
+﻿// Base configuration for GitHub Pages
+const config = {
+    basePath: "/effective-barnacle/",
+    pages: {
+        home: "index.html",
+        login: "login.html",
+        dashboard: "dashboard.html",
+        about: "about.html",
+        contact: "contact.html"
+    }
+};
 
+// Helper function to get full path
+function getPath(page) {
+    return config.basePath + config.pages[page];
+}
+
+// Helper function to get current page name
+function getCurrentPage() {
+    const path = window.location.pathname;
+    const page = path.split("/").pop() || "index.html";
+    return page;
+}
+
+// Login validation
 function validateLogin(event) {
     event.preventDefault();
     
@@ -14,7 +36,8 @@ function validateLogin(event) {
     if (username === validUsername && password === validPassword) {
         // Successful login
         localStorage.setItem("isLoggedIn", "true");
-        window.location.href = BASE_PATH + "dashboard.html";
+        localStorage.setItem("loginTime", new Date().getTime());
+        window.location.href = getPath("dashboard");
     } else {
         alert("Invalid credentials. Please try again.");
     }
@@ -22,24 +45,37 @@ function validateLogin(event) {
     return false;
 }
 
-// Check login status on page load
+// Check login status
 function checkLoginStatus() {
-    const isLoggedIn = localStorage.getItem("isLoggedIn");
-    const currentPage = window.location.pathname.split("/").pop();
-    
-    if (currentPage !== "login.html" && !isLoggedIn && currentPage !== "index.html") {
-        // Redirect to login if not logged in
-        window.location.href = BASE_PATH + "login.html";
-    } else if (currentPage === "login.html" && isLoggedIn) {
-        // Redirect to dashboard if already logged in
-        window.location.href = BASE_PATH + "dashboard.html";
+    const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+    const currentPage = getCurrentPage();
+    const loginTime = parseInt(localStorage.getItem("loginTime") || "0");
+    const currentTime = new Date().getTime();
+    const sessionTimeout = 24 * 60 * 60 * 1000; // 24 hours
+
+    // Check if session has expired
+    if (isLoggedIn && (currentTime - loginTime > sessionTimeout)) {
+        logout();
+        return;
+    }
+
+    // Handle page access based on auth status
+    if (currentPage === config.pages.login) {
+        if (isLoggedIn) {
+            window.location.href = getPath("dashboard");
+        }
+    } else if (currentPage === config.pages.dashboard) {
+        if (!isLoggedIn) {
+            window.location.href = getPath("login");
+        }
     }
 }
 
-// Add logout functionality
+// Logout functionality
 function logout() {
     localStorage.removeItem("isLoggedIn");
-    window.location.href = BASE_PATH + "login.html";
+    localStorage.removeItem("loginTime");
+    window.location.href = getPath("login");
 }
 
 // Handle contact form submission
@@ -64,13 +100,26 @@ function handleContactSubmit(event) {
     return false;
 }
 
-// Check login status when page loads
+// Initialize page
 document.addEventListener("DOMContentLoaded", function() {
-    // Check if we are on a page that needs login protection
-    const protectedPages = ["dashboard.html"];
-    const currentPage = window.location.pathname.split("/").pop() || "index.html";
+    // Check auth status
+    checkLoginStatus();
     
-    if (protectedPages.includes(currentPage)) {
-        checkLoginStatus();
+    // Add form event listeners
+    const loginForm = document.getElementById("loginForm");
+    if (loginForm) {
+        loginForm.addEventListener("submit", validateLogin);
+    }
+    
+    const contactForm = document.getElementById("contactForm");
+    if (contactForm) {
+        contactForm.addEventListener("submit", handleContactSubmit);
+    }
+    
+    // Update active navigation link
+    const currentPage = getCurrentPage();
+    const activeLink = document.querySelector(`.nav-links a[href="${currentPage}"]`);
+    if (activeLink) {
+        activeLink.classList.add("active");
     }
 });
